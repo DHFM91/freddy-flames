@@ -120,24 +120,84 @@ const touch=matchMedia('(pointer:coarse)').matches;
 // ---------- world ----------
 const FL=[252,196,140];              // feet line of each floor (ground, 2nd, 3rd)
 const LEFT=18, RIGHT=206;
-const LADDERS=[{x:30,a:0,b:1},{x:194,a:0,b:1},{x:76,a:1,b:2},{x:148,a:1,b:2}];
-const PIPES=[{x:70,f:0},{x:150,f:0},{x:44,f:1},{x:112,f:1},{x:178,f:1},{x:56,f:2},{x:168,f:2}];
+// ---------- houses: each level gets its own building, getting trickier as you go ----------
+const THEMES=[
+  {n:'THE COTTAGE',  wall:'#5c2a26',wd:'#4a201d',tex:'brick', room:'#241628',stripe:'#2b1b31',base:'#1d1121',roof:'#3a2032',roofL:'#4d2a40',beam:'#8a5a2b',carpet:'#b8432f',style:'gable'},
+  {n:'THE TOWNHOUSE',wall:'#3e4a5c',wd:'#323c4c',tex:'brick', room:'#1a2232',stripe:'#202a3c',base:'#141a27',roof:'#262b36',roofL:'#363d4c',beam:'#6a5a4a',carpet:'#3a6a8a',style:'flat'},
+  {n:'THE FARMHOUSE',wall:'#7a5530',wd:'#5e4024',tex:'siding',room:'#2a1c14',stripe:'#32221a',base:'#20150f',roof:'#5a2020',roofL:'#6e2a2a',beam:'#9a6a34',carpet:'#5a7a3a',style:'gable'},
+  {n:'THE VICTORIAN',wall:'#3e5a4a',wd:'#304a3c',tex:'siding',room:'#2a1a26',stripe:'#341f2f',base:'#1f1320',roof:'#2a2a3e',roofL:'#3a3a52',beam:'#7a4a2a',carpet:'#8a2a4a',style:'mansard'},
+  {n:'THE MANSION',  wall:'#6a6258',wd:'#57504a',tex:'stone', room:'#26202e',stripe:'#2e2738',base:'#1c1722',roof:'#2b2b3c',roofL:'#3b3b50',beam:'#5a4030',carpet:'#7a1e2a',style:'towers'},
+];
+function seeded(n){let v=(n>>>0)||1;return()=>{v^=v<<13;v>>>=0;v^=v>>>17;v^=v<<5;v>>>=0;return v/4294967296;};}
+function makeDecor(r,lad){
+  const d=[],kinds=['sofa','lamp','shelf','table','frame','clock','plant'];
+  for(let f=0;f<3;f++){
+    const n=2+Math.floor(r()*2);let tries=0,placed=0;
+    while(placed<n&&tries++<80){
+      const k=kinds[Math.floor(r()*kinds.length)],x=Math.round(26+r()*172);
+      if(lad.some(l=>(l.a===f||l.b===f)&&Math.abs(l.x-x)<16))continue;
+      if(d.some(o=>o.f===f&&Math.abs(o.x-x)<26))continue;
+      if(x>90&&x<148&&k==='frame')continue;
+      d.push({k,x,f});placed++;
+    }
+  }
+  return d;
+}
+function makeHouse(lv){
+  const th=THEMES[(lv-1)%THEMES.length];
+  if(lv===1){
+    const lad=[{x:30,a:0,b:1},{x:194,a:0,b:1},{x:76,a:1,b:2},{x:148,a:1,b:2}];
+    return {th,lad,pipes:[{x:70,f:0},{x:150,f:0},{x:44,f:1},{x:112,f:1},{x:178,f:1},{x:56,f:2},{x:168,f:2}],holes:[],decor:makeDecor(seeded(7),lad)};
+  }
+  const r=seeded(lv*7919+13),c=Math.min(lv-1,10),lad=[];let tries;
+  for(const gap of [0,1]){
+    const n=r()<.45?3:2;tries=0;
+    while(lad.filter(l=>l.a===gap).length<n&&tries++<300){
+      const x=Math.round(26+r()*172);
+      if(lad.some(l=>(l.a===gap&&Math.abs(l.x-x)<36)||Math.abs(l.x-x)<14))continue;
+      lad.push({x,a:gap,b:gap+1});
+    }
+  }
+  // burned-through floor holes: Freddy and the flames drop through them
+  const holes=[],nh=c<2?0:Math.min(4,Math.floor(c/2)+(r()<.5?1:0));tries=0;
+  while(holes.length<nh&&tries++<300){
+    const f=r()<.5?1:2,w=14+Math.floor(r()*10),x1=Math.round(34+r()*(150-w)),x2=x1+w;
+    if(lad.some(l=>(l.a===f||l.b===f)&&l.x>x1-14&&l.x<x2+14))continue;
+    if(holes.some(h=>h.f===f&&x1<h.x2+24&&x2>h.x1-24))continue;
+    holes.push({f,x1,x2});
+  }
+  // fewer leaky pipes (less water) in the later houses
+  const np=Math.max(4,8-Math.floor(c/2)),pipes=[];tries=0;
+  while(pipes.length<np&&tries++<400){
+    const f=pipes.length<3?pipes.length:Math.floor(r()*3),x=Math.round(30+r()*164);
+    if(lad.some(l=>Math.abs(l.x-x)<10))continue;
+    if(holes.some(h=>h.f===f&&x>h.x1-6&&x<h.x2+6))continue;
+    if(pipes.some(q=>q.f===f&&Math.abs(q.x-x)<26))continue;
+    pipes.push({x,f});
+  }
+  return {th,lad,pipes,holes,decor:makeDecor(r,lad)};
+}
+let house,LADDERS,PIPES,HOLES;
+function setHouse(lv){house=makeHouse(lv);LADDERS=house.lad;PIPES=house.pipes;HOLES=house.holes;}
+const inHole=(f,x)=>f>0&&HOLES.some(h=>h.f===f&&x>h.x1+1&&x<h.x2-1);
+setHouse(1);
 const PAL=[
-  {n:'RED',   o:'#d8321e',m:'#ff8a1c',c:'#ffe27a',sp:16,gr:6.0,tu:.35,la:.35,desc:'SLOW AND STEADY'},
-  {n:'BLUE',  o:'#2348e8',m:'#4fb2ff',c:'#dff6ff',sp:23,gr:5.4,tu:.5, la:.45,desc:'THEY RUN FASTER'},
-  {n:'GREEN', o:'#178a34',m:'#6fdc3e',c:'#efffb8',sp:19,gr:5.0,tu:1.6,la:.55,desc:'THEY ZIG AND ZAG'},
-  {n:'VIOLET',o:'#8a22c9',m:'#ff58cf',c:'#ffe0f7',sp:28,gr:4.4,tu:.7, la:.65,desc:'FAST AND CLIMBING'},
+  // sp speed, gr grow seconds, tu turn rate, la ladder chance, da dash rate, ch chase rate, sk ember seconds
+  {n:'RED',   o:'#d8321e',m:'#ff8a1c',c:'#ffe27a',sp:16,gr:5.4,tu:.42,la:.38,da:.08,ch:.15,sk:7.5,desc:'THEY THROW SPARKS'},
+  {n:'BLUE',  o:'#2348e8',m:'#4fb2ff',c:'#dff6ff',sp:23,gr:4.9,tu:.55,la:.48,da:.12,ch:.22,sk:6.5,desc:'THEY RUN FASTER'},
+  {n:'GREEN', o:'#178a34',m:'#6fdc3e',c:'#efffb8',sp:19,gr:4.5,tu:1.7,la:.55,da:.2, ch:.2, sk:6.0,desc:'THEY ZIG AND ZAG'},
+  {n:'VIOLET',o:'#8a22c9',m:'#ff58cf',c:'#ffe0f7',sp:28,gr:4.0,tu:.8, la:.65,da:.22,ch:.4, sk:5.0,desc:'THEY HUNT YOU DOWN'},
 ];
 const PUDW=[0,7,13,21];
 const TANKMAX=16;                    // 8 pressure levels x 2 shots
-const MAXF=16;
+const MAXF=17;
 const STARS=Array.from({length:40},()=>({x:Math.random()*W|0,y:24+Math.random()*70|0,p:Math.random()*6}));
 
 // ---------- state ----------
 let st='attract', stT=0, atPage=0, clock=0, paused=false;
 let score=0, lives=3, level=1, extraGiven=false, demoLevel=1;
 let fred, flames=[], drips=[], puds=[], streams=[], parts=[], pops=[], pipeT=[];
-let bonusT=0, bonusScore=0, tankBonus=0, entry=null;
+let bonusT=0, bonusScore=0, tankBonus=0, entry=null, embers=[], burnT=0, burned=false;
 // Global leaderboard: a shared JSON bin, list of [initials, score], best first.
 const LB_URL='https://json.extendsclass.com/bin/15c396252bb6';
 const LB_SIZE=10;
@@ -285,23 +345,27 @@ const sfx={
 // ---------- setup ----------
 function resetFred(){fred={x:24,y:FL[0],f:0,dir:1,mode:'floor',vy:0,air:false,anim:0,inv:2,lad:null,tank:fred?fred.tank:TANKMAX};}
 function resetPipes(fast){pipeT=PIPES.map(()=>fast?rnd(.2,1.2):rnd(1.5,7));}
-function mkFlame(x,f,s,dir){return {x,y:FL[f],f,s,dir:dir||(Math.random()<.5?-1:1),mode:'floor',lad:null,tgt:0,growT:rnd(0,2),stun:0,cool:.5,seed:Math.random()*9};}
+function mkFlame(x,f,s,dir){return {x,y:FL[f],f,s,dir:dir||(Math.random()<.5?-1:1),mode:'floor',lad:null,tgt:0,growT:rnd(0,2),stun:0,cool:.5,seed:Math.random()*9,spark:rnd(1.5,4),hold:0,dash:0,vy:0};}
 function spawnFlames(){
-  flames=[];const n=Math.min(3+Math.floor((level-1)/2),8);
-  for(let i=0;i<n;i++){const f=i%3;let x=rnd(40,196);if(f===0)x=rnd(96,200);flames.push(mkFlame(x,f,Math.random()<.5?1:2));}
+  flames=[];embers=[];burnT=0;const n=Math.min(3+Math.floor((level-1)/2),8);
+  for(let i=0;i<n;i++){
+    const f=i%3;let x=0,t=0;
+    do{x=f===0?rnd(96,200):rnd(40,196);}while(inHole(f,x)&&t++<20);
+    flames.push(mkFlame(x,f,Math.random()<.4?1:2));
+  }
 }
 function newGame(){score=0;lives=3;level=1;extraGiven=false;fred=null;startLevel();}
 function startLevel(){
-  fred=null;resetFred();fred.tank=TANKMAX;fred.inv=2;
+  setHouse(level);fred=null;resetFred();fred.tank=TANKMAX;fred.inv=2;
   drips=[];puds=[];streams=[];parts=[];pops=[];resetPipes(false);spawnFlames();
   st='ready';stT=2.4;sfx.start();
 }
 function startBonus(){
-  resetFred();fred.tank=TANKMAX;flames=[];drips=[];puds=[];streams=[];resetPipes(true);
+  resetFred();fred.tank=TANKMAX;flames=[];embers=[];burnT=0;drips=[];puds=[];streams=[];resetPipes(true);
   bonusT=15;bonusScore=0;st='bonusReady';stT=2.2;sfx.start();
 }
 function toAttract(page){
-  st='attract';atPage=page||0;stT=page===2?6:7;demoLevel=1;level=1;fred=null;resetFred();fred.x=-50;
+  st='attract';atPage=page||0;stT=page===2?6:7;demoLevel=1;level=1;setHouse(1);fred=null;resetFred();fred.x=-50;embers=[];burnT=0;
   flames=[mkFlame(80,0,1),mkFlame(150,1,2),mkFlame(60,2,1)];drips=[];puds=[];streams=[];resetPipes(false);
 }
 function addScore(n){
@@ -317,6 +381,7 @@ function updFred(dt){
     if(mv){f.dir=mv;f.x+=mv*44*dt;f.anim+=dt;}
     f.x=clamp(f.x,LEFT,RIGHT);
     f.jb=Math.max(0,(f.jb||0)-dt);if(P.jump)f.jb=.15;
+    if(!f.air&&inHole(f.f,f.x)){f.air=true;f.vy=20;f.f--;}
     if(f.air){
       f.vy+=420*dt;f.y+=f.vy*dt;
       if(f.y>=FL[f.f]){f.y=FL[f.f];f.air=false;f.vy=0;}
@@ -363,14 +428,22 @@ function updStreams(dt){
         const l=fl.x-w/2,r=fl.x+w/2;if(r<a||l>b)continue;
         const d=s.dir>0?l-s.x:s.x-r;if(d<bd){bd=d;best=fl;}
       }
-      if(best){s.hit=true;s.max=s.len=Math.max(2,bd+2);hitFlame(best);}
+      if(best){s.hit=true;s.max=s.len=Math.max(2,bd+2);hitFlame(best,s.lvl);}
+      const a2=Math.min(s.x,s.x+s.dir*s.len),b2=Math.max(s.x,s.x+s.dir*s.len);
+      embers=embers.filter(e=>{
+        if(Math.abs(e.y-s.y)>5||e.x<a2||e.x>b2)return true;
+        addScore(25);pops.push({x:e.x,y:e.y-8,t:.5,s:'25',c:'#7fd0ff'});
+        for(let i=0;i<4;i++)parts.push({x:e.x,y:e.y,vx:rnd(-10,10),vy:rnd(-30,-10),l:.5,c:'#d8dce6',z:1,steam:1});
+        return false;
+      });
     }
     if(Math.random()<.6){const tx=s.x+s.dir*s.len;parts.push({x:tx,y:s.y+1,vx:s.dir*rnd(-10,20),vy:rnd(-20,10),l:.4,c:'#7fd0ff',z:1});}
   }
   streams=streams.filter(s=>s.a>0);
 }
-function hitFlame(fl){
+function hitFlame(fl,lvl){
   for(let i=0;i<6;i++)parts.push({x:fl.x+rnd(-4,4),y:fl.y-fdim(fl.s).h/2,vx:rnd(-12,12),vy:rnd(-40,-15),l:rnd(.5,.9),c:'#d8dce6',z:2,steam:1});
+  if(lvl<=2&&fl.s>=4){fl.stun=.15;tone(200,.1,'sawtooth',.03,120);pops.push({x:fl.x,y:fl.y-28,t:.7,s:'TOO WEAK',c:'#9aa1b5'});return;}
   fl.s--;
   if(fl.s<=0){
     flames.splice(flames.indexOf(fl),1);addScore(200);sfx.out();
@@ -394,9 +467,15 @@ function updFlames(dt,cap){
         continue;
       }
     }
+    fl.spark-=dt;
+    if(fl.s>=3&&fl.mode==='floor'&&fl.spark<=0){fl.spark=rnd(.7,1.3)*p.sk*gm;if(flames.length+embers.length<cap)throwEmber(fl);}
     if(fl.mode==='floor'){
+      fl.hold=Math.max(0,fl.hold-dt);fl.dash=Math.max(0,fl.dash-dt);
       if(Math.random()<p.tu*dt)fl.dir*=-1;
-      const nx=fl.x+fl.dir*p.sp*m*dt;
+      if(Math.random()<.2*dt)fl.hold=rnd(.3,1.1);
+      if(Math.random()<p.da*dt){fl.dash=rnd(.4,.9);fl.hold=0;}
+      if(st==='play'&&fred&&fred.f===fl.f&&fred.mode==='floor'&&Math.abs(fred.x-fl.x)<48&&Math.random()<p.ch*dt){fl.dir=Math.sign(fred.x-fl.x)||1;fl.dash=rnd(.5,.9);fl.hold=0;}
+      const nx=fl.x+fl.dir*(fl.hold>0?0:p.sp*m*(fl.dash>0?1.7:1))*dt;
       if(fl.cool<=0)for(const L of LADDERS){
         if((L.a===fl.f||L.b===fl.f)&&(fl.x-L.x)*(nx-L.x)<=0){
           if(Math.random()<p.la){fl.mode='climb';fl.lad=L;fl.x=L.x;fl.tgt=L.a===fl.f?L.b:L.a;}
@@ -404,12 +483,37 @@ function updFlames(dt,cap){
           break;
         }
       }
-      if(fl.mode==='floor'){fl.x=nx;if(fl.x<LEFT){fl.x=LEFT;fl.dir=1;}if(fl.x>RIGHT){fl.x=RIGHT;fl.dir=-1;}}
+      if(fl.mode==='floor'){
+        fl.x=nx;if(fl.x<LEFT){fl.x=LEFT;fl.dir=1;}if(fl.x>RIGHT){fl.x=RIGHT;fl.dir=-1;}
+        if(inHole(fl.f,fl.x)){fl.mode='fall';fl.f--;fl.vy=0;}
+      }
+    }else if(fl.mode==='fall'){
+      fl.vy+=320*dt;fl.y+=fl.vy*dt;
+      if(fl.y>=FL[fl.f]){fl.y=FL[fl.f];fl.mode='floor';fl.cool=.6;}
     }else{
       const ty=FL[fl.tgt],d=Math.sign(ty-fl.y);fl.y+=d*p.sp*.8*m*dt;
       if((ty-fl.y)*d<=0){fl.y=ty;fl.f=fl.tgt;fl.mode='floor';fl.cool=1.2;}
     }
   }
+}
+// Big flames spit sparks; a spark that lands becomes a new flame (sometimes up through the ceiling).
+function throwEmber(fl){
+  const up=fl.f<2&&Math.random()<.25;
+  embers.push({x:fl.x,y:fl.y-fdim(fl.s).h+2,vx:rnd(-45,45),vy:up?-178:-rnd(70,110),tf:up?fl.f+1:fl.f});
+  if(st==='play')tone(900,.06,'square',.02,1700);
+}
+function updEmbers(dt,cap){
+  for(const e of embers){
+    e.vy+=200*dt;e.x+=e.vx*dt;e.y+=e.vy*dt;
+    if(e.x<LEFT){e.x=LEFT;e.vx=-e.vx;}if(e.x>RIGHT){e.x=RIGHT;e.vx=-e.vx;}
+    if(Math.random()<.5)parts.push({x:e.x,y:e.y,vx:0,vy:0,l:.25,c:pal().m,z:1,steam:1});
+  }
+  embers=embers.filter(e=>{
+    if(e.vy<=0||e.y<FL[e.tf])return true;
+    if(flames.length<cap){const n=mkFlame(e.x,e.tf,1);n.growT=0;n.cool=.4;flames.push(n);}
+    for(let i=0;i<5;i++)parts.push({x:e.x,y:FL[e.tf]-2,vx:rnd(-30,30),vy:rnd(-50,-10),l:.4,c:pal().c,z:1,g:1});
+    return false;
+  });
 }
 function updWater(dt,bonus,canPick){
   const life=bonus?1.5:5;
@@ -466,24 +570,25 @@ function update(dt){
   const anyStart=P.start||P.fire||P.jump||tapStart;tapStart=false;
   switch(st){
     case 'attract':
-      stT-=dt;demoLevel=1+Math.floor(clock/9)%4;
-      updFlames(dt,7);updWater(dt,false,false);
+      stT-=dt;{const dl=1+Math.floor(clock/9)%5;if(dl!==demoLevel){demoLevel=dl;setHouse(dl);resetPipes(false);drips=[];puds=[];embers=[];}}
+      updFlames(dt,7);updEmbers(dt,7);updWater(dt,false,false);
       if(stT<=0){atPage=(atPage+1)%3;stT=atPage===2?6:7;}
       if(anyStart){newGame();}
       break;
     case 'ready': stT-=dt;if(stT<=0)st='play';break;
     case 'play':
       if(P.start){togglePause();break;}
-      updFred(dt);updStreams(dt);updFlames(dt,MAXF);updWater(dt,false,true);hurtCheck();
+      updFred(dt);updStreams(dt);updFlames(dt,MAXF);updEmbers(dt,MAXF);updWater(dt,false,true);hurtCheck();
       if(st==='play'&&flames.length===0){st='clear';stT=3.4;tankBonus=fred.tank*100;addScore(tankBonus);streams=[];sfx.clear();}
       break;
     case 'dying':
       stT-=dt;
       if(stT<=0){
         lives--;
-        if(lives<=0){st='over';stT=3.5;lbPending=refreshBoard().finally(()=>{lbPending=null;});}
+        if(lives<=0){burned=false;st='over';stT=3.5;lbPending=refreshBoard().finally(()=>{lbPending=null;});}
         else{
           const tank=fred.tank;resetFred();fred.tank=Math.max(tank,8);fred.inv=2.5;
+          if(burned){burned=false;spawnFlames();puds=[];drips=[];}
           for(const fl of flames)if(fl.f===0&&fl.x<110&&fl.mode==='floor')fl.x=rnd(130,200);
           streams=[];st='ready';stT=1.6;
         }
@@ -524,56 +629,118 @@ const R=(x,y,w,h,c)=>{g.fillStyle=c;g.fillRect(Math.round(x),Math.round(y),w,h);
 function txt(s,x,y,c,al='left',size=8){
   g.font=size+'px "Press Start 2P", monospace';g.textBaseline='top';g.textAlign=al;g.fillStyle=c;g.fillText(s,Math.round(x),Math.round(y));
 }
+const tri=(x1,y1,x2,y2,x3,y3,c)=>{g.fillStyle=c;g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.lineTo(x3,y3);g.closePath();g.fill();};
+function drawMoon(x,y){
+  const gr=g.createRadialGradient(x,y,5,x,y,22);gr.addColorStop(0,'rgba(236,230,200,.22)');gr.addColorStop(1,'rgba(236,230,200,0)');
+  g.fillStyle=gr;g.fillRect(x-22,y-22,44,44);
+  g.fillStyle='#ece6c8';g.beginPath();g.arc(x,y,7.5,0,Math.PI*2);g.fill();
+  g.fillStyle='#d6cda8';g.beginPath();g.arc(x+1.5,y+1.5,6,0,Math.PI*2);g.fill();
+  g.fillStyle='#ece6c8';g.beginPath();g.arc(x-.5,y-.5,5.5,0,Math.PI*2);g.fill();
+  R(x-4,y-2,3,2,'#cbc29c');R(x+1,y+2,3,2,'#cbc29c');R(x+2,y-4,2,2,'#cbc29c');R(x-2,y+3,1,1,'#cbc29c');
+}
+function drawRoof(th){
+  const hot=flames.some(f=>f.f===2),win=hot?'#5a2a1a':'#1c2650';let sx=166,sy=40;
+  if(th.style==='gable'){
+    R(160,46,12,26,th.wall);R(158,44,16,4,th.wd);
+    tri(2,90,112,32,222,90,th.roof);
+    g.fillStyle=th.roofL;for(let y=40;y<90;y+=6){const hw=(y-32)*110/58;g.fillRect(Math.round(112-hw),y,Math.round(hw*2),1);}
+    R(104,62,16,14,'#14102a');R(105,63,14,12,win);R(111,63,2,12,th.roof);R(105,68,14,2,th.roof);
+  }else if(th.style==='flat'){
+    sx=123;sy=56;R(120,58,7,20,th.wd);
+    R(170,58,2,20,'#4a3a2e');R(186,58,2,20,'#4a3a2e');R(170,66,18,1,'#4a3a2e');
+    R(166,42,26,16,'#6a5038');for(let y=45;y<58;y+=4)R(166,y,26,1,'#4e3a28');
+    tri(164,42,179,32,194,42,'#4e3a28');
+    R(38,44,1,32,'#7a8090');R(34,48,9,1,'#7a8090');R(35,54,7,1,'#7a8090');if(Math.floor(clock*2)%2)R(38,43,1,1,'#ff4a3a');
+    R(4,76,216,12,th.roof);R(4,73,216,3,th.roofL);for(let x=4;x<220;x+=12)R(x,70,6,3,th.roofL);
+  }else if(th.style==='mansard'){
+    sx=155;sy=36;R(150,38,10,16,th.wd);R(148,36,14,3,th.roofL);
+    g.fillStyle=th.roof;g.beginPath();g.moveTo(4,90);g.lineTo(26,52);g.lineTo(198,52);g.lineTo(220,90);g.closePath();g.fill();
+    R(26,49,172,4,th.roofL);
+    g.fillStyle=th.roofL;for(let y=58;y<90;y+=6){const k=(y-52)/38;g.fillRect(Math.round(26-22*k),y,Math.round(172+44*k),1);}
+    for(const dx of [72,112,176]){R(dx-8,62,16,18,th.roofL);tri(dx-10,63,dx,54,dx+10,63,th.roofL);R(dx-5,66,10,11,'#14102a');R(dx-4,67,8,9,win);R(dx-1,67,2,9,th.roofL);}
+    R(14,52,24,38,th.wall);for(let y=54;y<90;y+=4)R(14,y,24,1,th.wd);
+    tri(10,54,26,28,42,54,th.roof);R(25,25,2,4,'#c8a050');
+    R(21,62,10,14,'#14102a');R(22,63,8,12,win);
+  }else{
+    sx=131;sy=46;R(126,50,10,20,th.wd);R(124,48,14,3,th.roofL);
+    tri(30,90,112,46,194,90,th.roof);
+    g.fillStyle=th.roofL;for(let y=52;y<90;y+=6){const hw=(y-46)*82/44;g.fillRect(Math.round(112-hw),y,Math.round(hw*2),1);}
+    for(const tx of [6,188]){
+      R(tx,50,30,40,th.wall);for(let y=52;y<90;y+=8)R(tx,y,30,1,th.wd);
+      tri(tx-4,52,tx+15,28,tx+34,52,th.roof);R(tx+14,25,2,4,'#c8a050');
+      R(tx+10,60,10,16,'#14102a');R(tx+11,62,8,13,win);R(tx+12,61,6,1,win);
+    }
+    R(104,64,16,14,'#14102a');R(105,65,14,12,win);R(111,65,2,12,th.roof);
+  }
+  const smoke=Math.min(1,flames.length/6);
+  for(let i=0;i<4;i++){const t=(clock*.35+i/4)%1;g.globalAlpha=(1-t)*.35*smoke;R(sx-2+Math.sin(t*6+i)*6-4*t,sy-t*30,5+t*6,4+t*4,'#6a6478');}
+  g.globalAlpha=1;
+}
+function drawDecor(f,top){
+  const y=FL[f];
+  for(const o of house.decor){
+    if(o.f!==f)continue;const x=o.x;
+    switch(o.k){
+      case 'sofa':R(x-10,y-11,20,5,'#4a2f3a');R(x-10,y-6,20,5,'#5a3a48');R(x-12,y-9,3,8,'#4a2f3a');R(x+9,y-9,3,8,'#4a2f3a');break;
+      case 'lamp':R(x,y-18,1,18,'#6a6070');R(x-2,y-1,5,1,'#6a6070');R(x-3,y-23,7,5,'#c8a050');g.globalAlpha=.12;R(x-8,y-27,17,14,'#ffd88a');g.globalAlpha=1;break;
+      case 'shelf':
+        R(x-7,y-26,14,26,'#4a3020');
+        for(let k=0;k<3;k++){const sy=y-24+k*8;for(let b=0;b<5;b++)R(x-6+b*2+(b>2?1:0),sy+1,1,6,['#8a3a3a','#3a5a8a','#c8a050','#3a7a4a','#7a4a8a'][(b+k+x)%5]);R(x-6,sy+7,12,1,'#2a1a10');}
+        break;
+      case 'table':R(x-9,y-9,18,2,'#6a4a2c');R(x-8,y-7,1,7,'#4a3020');R(x+7,y-7,1,7,'#4a3020');R(x-2,y-12,3,3,'#c8c8d8');break;
+      case 'frame':R(x-6,top+14,12,10,'#8a6a30');R(x-5,top+15,10,8,['#2a3a5a','#3a5a3a','#5a2a2a'][x%3]);R(x-3,top+19,6,2,'#c8a050');break;
+      case 'clock':R(x-3,y-28,7,28,'#4a2c1c');R(x-2,y-26,5,5,'#d8d0b0');R(x,y-25,1,2,'#222');R(x-1,y-18,3,8,'#2a1a10');R(x,y-15+Math.round(Math.sin(clock*3)),1,3,'#c8a050');break;
+      case 'plant':R(x-3,y-5,6,5,'#8a4a2a');R(x-1,y-11,2,6,'#3a7a3a');R(x-4,y-10,3,2,'#4a9a4a');R(x+1,y-12,3,2,'#4a9a4a');R(x-3,y-14,2,3,'#3a7a3a');break;
+    }
+  }
+}
 function drawWorld(){
-  // night sky
+  const th=house.th;
   R(0,0,W,H,'#07081c');
   for(const s of STARS){if(Math.sin(clock*2+s.p)>-.3)R(s.x,s.y,1,1,'#c8cde8');}
-  R(186,30,10,10,'#e9e4c8');R(189,30,7,8,'#07081c');
-  // chimney and smoke
-  R(160,46,12,26,'#5c2a26');R(158,44,16,4,'#3d1c1a');
-  const smoke=Math.min(1,flames.length/6);
-  for(let i=0;i<4;i++){const t=(clock*.35+i/4)%1;g.globalAlpha=(1-t)*.35*smoke;R(164+Math.sin(t*6+i)*6-4*t,40-t*30,5+t*6,4+t*4,'#6a6478');}
-  g.globalAlpha=1;
-  // roof
-  g.fillStyle='#3a2032';g.beginPath();g.moveTo(2,90);g.lineTo(112,32);g.lineTo(222,90);g.closePath();g.fill();
-  g.fillStyle='#4d2a40';for(let y=40;y<90;y+=6){const hw=(y-32)*110/58;g.fillRect(Math.round(112-hw),y,Math.round(hw*2),1);}
-  R(104,62,16,14,'#14102a');R(105,63,14,12,flames.some(f=>f.f===2)?'#5a2a1a':'#1c2650');R(111,63,2,12,'#3a2032');R(105,68,14,2,'#3a2032');
+  drawMoon(th.style==='towers'?150:th.style==='flat'?84:190,40);
+  drawRoof(th);
   // outer walls
-  R(6,88,212,172,'#5c2a26');
-  for(let y=90;y<258;y+=4)for(let x=(y/4%2)*4+6;x<218;x+=8){R(x,y,1,1,'#4a201d');}
+  R(6,88,212,172,th.wall);
+  if(th.tex==='brick'){for(let y=90;y<258;y+=4)for(let x=(y/4%2)*4+6;x<218;x+=8)R(x,y,1,1,th.wd);}
+  else if(th.tex==='siding'){for(let y=90;y<258;y+=4)R(6,y,212,1,th.wd);}
+  else{for(let y=88;y<258;y+=8){R(6,y,212,1,th.wd);for(let x=6+((y/8)%2)*8;x<218;x+=16)R(x,y,1,8,th.wd);}}
   // rooms
   for(let i=0;i<3;i++){
     const top=FL[i]-52,hgt=52;
-    R(12,top,200,hgt,'#241628');
-    for(let x=14;x<212;x+=8)R(x,top,2,hgt,'#2b1b31');
-    R(12,top+hgt-6,200,6,'#1d1121');
-    // windows
+    R(12,top,200,hgt,th.room);
+    for(let x=14;x<212;x+=8)R(x,top,2,hgt,th.stripe);
+    R(12,top+hgt-6,200,6,th.base);
     for(const wx of [100,128]){
       const wy=top+14;R(wx-1,wy-1,14,18,'#4a3a2a');R(wx,wy,12,16,i===0?'#18214a':'#121a3e');R(wx+5,wy,2,16,'#4a3a2a');R(wx,wy+7,12,2,'#4a3a2a');
     }
-    // glow on walls from flames on this floor
+    drawDecor(i,top);
     for(const fl of flames)if(fl.f===i&&fl.mode==='floor'){
       const gr=g.createRadialGradient(fl.x,fl.y-6,2,fl.x,fl.y-6,18+fl.s*8);gr.addColorStop(0,pal().m+'55');gr.addColorStop(1,pal().m+'00');
       g.fillStyle=gr;g.fillRect(12,top,200,hgt);
     }
-    // ceiling pipe
     const py=FL[i]-50;
     R(12,py,200,3,'#6e7588');R(12,py,200,1,'#aab2c4');
     for(let x=24;x<212;x+=24)R(x,py-1,3,5,'#4f5566');
   }
-  // broken pipe joints with forming droplets
   PIPES.forEach((pp,i)=>{
-    const py=FL[pp.f]-50;R(pp.x-3,py,6,3,'#241628');R(pp.x-4,py-1,2,5,'#4f5566');R(pp.x+2,py-1,2,5,'#4f5566');
+    const py=FL[pp.f]-50;R(pp.x-3,py,6,3,th.room);R(pp.x-4,py-1,2,5,'#4f5566');R(pp.x+2,py-1,2,5,'#4f5566');
     const t=clamp(1-pipeT[i]/1.2,0,1);if(t>0)R(pp.x-1,py+2,2,1+Math.round(t*2),'#5cc2ff');
   });
   // floors / beams
-  for(let i=0;i<3;i++){
-    const y=FL[i];R(6,y,212,4,'#8a5a2b');R(6,y,212,1,'#b8432f');R(6,y+3,212,1,'#5e3b1a');
+  for(let i=0;i<3;i++){const y=FL[i];R(6,y,212,4,th.beam);R(6,y,212,1,th.carpet);R(6,y+3,212,1,'#3a2614');}
+  // burned-through holes in the floor
+  for(const h of HOLES){
+    const y=FL[h.f],w=h.x2-h.x1;
+    R(h.x1-4,y,w+8,2,'#2a1408');R(h.x1-6,y,2,1,'#3a1c0c');R(h.x2+4,y,2,1,'#3a1c0c');
+    R(h.x1,y-1,w,6,'#040208');
+    for(let x=h.x1;x<h.x2;x+=2)R(x,y+5,2,1+(x*5)%3,'#040208');
+    const glow=.5+.5*Math.sin(clock*4+h.x1);g.globalAlpha=.5+.5*glow;
+    R(h.x1-1,y,1,3,'#ff6a1a');R(h.x2,y,1,3,'#ff6a1a');R(h.x1,y-1,2,1,'#ffb03a');R(h.x2-2,y-1,2,1,'#ffb03a');g.globalAlpha=1;
   }
   R(6,256,212,6,'#3b3a48');for(let x=8;x<216;x+=12)R(x,258,1,4,'#2a2934');
-  // ladder holes + ladders
   for(const L of LADDERS){
-    R(L.x-6,FL[L.b],12,4,'#1d1121');
+    R(L.x-6,FL[L.b],12,4,th.base);
     const t=FL[L.b]-10,b=FL[L.a];
     R(L.x-6,t,1,b-t,'#d9b25a');R(L.x+5,t,1,b-t,'#d9b25a');
     for(let y=t+3;y<b;y+=5)R(L.x-5,y,10,1,'#b38a3a');
@@ -647,6 +814,7 @@ function drawStreams(){
   }
 }
 function drawParts(){
+  {const p=pal();for(const e of embers){R(e.x-1,e.y-1,3,3,p.m);R(e.x,e.y,1,1,p.c);}}
   for(const p of parts){g.globalAlpha=clamp(p.l*2,0,1);R(p.x,p.y,p.z||1,p.z||1,p.c);}
   g.globalAlpha=1;
   for(const p of pops){g.globalAlpha=clamp(p.t*2,0,1);txt(p.s,p.x,p.y,p.c,'center');}
@@ -738,8 +906,10 @@ function render(){
   drawStreams();drawParts();drawHUD();
   if(st==='attract')drawAttract();
   if(st==='ready'){
-    const help=level===1;panel(96,help?178:150);txt('LEVEL '+pad(level,2),112,104,'#ffcf4a','center');txt(p.n+' FLAMES',112,118,p.m,'center');txt(p.desc,112,132,'#9aa1b5','center');
-    if(help){txt(touch?'STICK: WALK & LADDERS':'ARROWS: WALK & LADDERS',112,152,'#f4ead8','center');txt(touch?'RED SQUIRT  BLUE JUMP':'SPACE SQUIRT  Z JUMP',112,164,'#f4ead8','center');}
+    const help=level===1;panel(92,help?190:HOLES.length?178:164);txt('LEVEL '+pad(level,2),112,100,'#ffcf4a','center');txt(house.th.n,112,114,'#f4ead8','center');
+    txt(p.n+' FLAMES',112,132,p.m,'center');txt(p.desc,112,146,'#9aa1b5','center');
+    if(help){txt(touch?'STICK: WALK & LADDERS':'ARROWS: WALK & LADDERS',112,164,'#f4ead8','center');txt(touch?'RED SQUIRT  BLUE JUMP':'SPACE SQUIRT  Z JUMP',112,176,'#f4ead8','center');}
+    else if(HOLES.length)txt('WATCH THE FLOOR!',112,164,'#ff6a1a','center');
   }
   if(st==='clear'){panel(96,150);txt('FIRE IS OUT!',112,104,'#ffcf4a','center');txt('TANK BONUS',112,120,'#f4ead8','center');txt(String(tankBonus),112,134,'#7fd0ff','center');}
   if(st==='bonusReady'){panel(96,156);txt('BONUS ROUND',112,104,'#ffcf4a','center');txt('THE PIPES BURST!',112,120,'#7fd0ff','center');txt('GRAB EVERY PUDDLE',112,136,'#f4ead8','center');}
