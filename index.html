@@ -402,10 +402,14 @@ function updBonus(dt){
   const f=fred;
   if(bType===0){
     // one pipe at a time bursts somewhere away from Freddy
-    const live=drips.length||puds.length||pipeT.some(t=>t<Infinity);
-    if(!live){bWait-=dt;if(bWait<=0){
-      const c=PIPES.map((q,i)=>({f:q.f,x:q.x,i})).filter(o=>o.i!==bLast);
-      const pick=awaySpot(c);bLast=pick.i;pipeT[pick.i]=.8;
+    // keep two bursts going at once, so there is always somewhere worth heading
+    const live=drips.length+puds.length+pipeT.filter(t=>t<Infinity).length;
+    if(live<2){bWait-=dt;if(bWait<=0){
+      const travel=o=>{const df=o.f-f.f;return (df>0?df*2.2:-df*.9)+Math.abs(o.x-f.x)/44;};
+      const busy=(o,i)=>pipeT[i]<Infinity||puds.some(p=>p.f===o.f&&Math.abs(p.x-o.x)<14)||drips.some(d=>d.f===o.f&&Math.abs(d.x-o.x)<4);
+      const c=PIPES.map((q,i)=>({f:q.f,x:q.x,i})).filter(o=>o.i!==bLast&&!busy(o,o.i));
+      const reach=c.filter(o=>travel(o)<5.5);
+      const pick=awaySpot(reach.length?reach:c.sort((a,b)=>travel(a)-travel(b)).slice(0,2));if(pick){bLast=pick.i;pipeT[pick.i]=.8;}bWait=1.4;
     }}
     updWater(dt,true,true);
   }else if(bType===1){
@@ -443,7 +447,7 @@ function updBonus(dt){
     });
   }
 }
-function bonusMiss(p){if(st!=='bonus'||bType!==0)return;combo=0;bWait=.3;pops.push({x:p.x,y:FL[p.f]-20,t:.7,s:'MISSED',c:'#9aa1b5'});}
+function bonusMiss(p){if(st!=='bonus'||bType!==0)return;combo=Math.max(0,combo-2);bWait=.3;pops.push({x:p.x,y:FL[p.f]-20,t:.7,s:'MISSED',c:'#9aa1b5'});}
 function toAttract(page){
   st='attract';atPage=page||0;stT=page===2?6:7;demoLevel=1;level=1;setHouse(1);fred=null;resetFred();fred.x=-50;embers=[];burnT=0;
   flames=[mkFlame(80,0,1),mkFlame(150,1,2),mkFlame(60,2,1)];drips=[];puds=[];streams=[];resetPipes(false);
@@ -625,7 +629,7 @@ function updEmbers(dt,cap){
   });
 }
 function updWater(dt,bonus,canPick){
-  const life=bonus?Math.max(1.2,1.8-.2*bTier):5;
+  const life=bonus?Math.max(2,2.7-.2*bTier):5;
   PIPES.forEach((pp,i)=>{
     pipeT[i]-=dt;
     if(pipeT[i]<=0){
