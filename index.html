@@ -198,7 +198,7 @@ const STARS=Array.from({length:40},()=>({x:Math.random()*W|0,y:24+Math.random()*
 let st='attract', stT=0, atPage=0, clock=0, paused=false;
 let score=0, lives=3, level=1, extraGiven=false, demoLevel=1;
 let fred, flames=[], drips=[], puds=[], streams=[], parts=[], pops=[], pipeT=[];
-let bonusT=0, bonusScore=0, tankBonus=0, entry=null, embers=[], burnT=0, burned=false;
+let bonusT=0, bonusScore=0, tankBonus=0, entry=null, embers=[], burnT=0, burned=false, houseT=0, houseMax=0, timeBonus=0;
 // bonus rounds: 0 PIPE BURST, 1 PET RESCUE, 2 HOT SPOTS (rotate; each lap gets tighter)
 let bType=0, bTier=0, combo=0, bWait=0, bLast=-1, bPerfect=false, pets=[], targets=[];
 const BONUS=[
@@ -363,6 +363,7 @@ function spawnFlames(){
     do{x=f===0?rnd(96,200):rnd(40,196);}while(inHole(f,x)&&t++<20);
     flames.push(mkFlame(x,f,Math.random()<.4?1:2));
   }
+  houseMax=houseT=90+12*n;
 }
 function newGame(){score=0;lives=3;level=1;extraGiven=false;fred=null;startLevel();}
 function startLevel(){
@@ -688,7 +689,12 @@ function update(dt){
     case 'play':
       if(P.start){togglePause();break;}
       updFred(dt);updStreams(dt);updFlames(dt,MAXF);updEmbers(dt,MAXF);updWater(dt,false,true);hurtCheck();
-      if(st==='play'&&flames.length===0){st='clear';stT=3.4;tankBonus=lvPts(fred.tank*100);addScore(tankBonus);streams=[];sfx.clear();}
+      if(st==='play'){
+        const before=Math.ceil(houseT);houseT-=dt;
+        if(houseT<10&&Math.ceil(houseT)!==before&&houseT>0)tone(houseT<5?1200:900,.05,'square',.04);
+        if(houseT<=0&&flames.length){houseT=0;st='dying';stT=2.8;burned=true;streams=[];sfx.die();noise(1.2,300,.12,.7,0,80);}
+      }
+      if(st==='play'&&flames.length===0){st='clear';stT=3.6;tankBonus=lvPts(fred.tank*100);timeBonus=lvPts(Math.ceil(houseT)*10);addScore(tankBonus+timeBonus);streams=[];sfx.clear();}
       break;
     case 'dying':
       stT-=dt;
@@ -1046,7 +1052,9 @@ function render(){
     if(help){txt(touch?'STICK: WALK & LADDERS':'ARROWS: WALK & LADDERS',112,164,'#f4ead8','center');txt(touch?'RED SQUIRT  BLUE JUMP':'SPACE SQUIRT  UP JUMP',112,176,'#f4ead8','center');}
     else{txt('POINTS X'+lvMult().toFixed(2).replace(/0$/,''),112,164,'#6fdc3e','center');if(HOLES.length)txt('WATCH THE FLOOR!',112,178,'#ff6a1a','center');}
   }
-  if(st==='clear'){panel(96,150);txt('FIRE IS OUT!',112,104,'#ffcf4a','center');txt('TANK BONUS',112,120,'#f4ead8','center');txt(String(tankBonus),112,134,'#7fd0ff','center');}
+  if(st==='play'&&houseT<30&&(houseT>10||Math.floor(clock*4)%2))txt('HOUSE COLLAPSES IN '+Math.ceil(houseT),112,28,houseT<10?'#ff4a3a':'#ffcf4a','center');
+  if(st==='dying'&&burned&&stT<2.4){panel(106,146);txt('THE HOUSE',112,114,'#ff4a3a','center');txt('BURNED DOWN!',112,128,'#ff4a3a','center');}
+  if(st==='clear'){panel(96,176);txt('FIRE IS OUT!',112,104,'#ffcf4a','center');txt('TANK BONUS',112,120,'#f4ead8','center');txt(String(tankBonus),112,132,'#7fd0ff','center');txt('TIME BONUS',112,148,'#f4ead8','center');txt(String(timeBonus),112,160,'#7fd0ff','center');}
   if(st==='bonusReady'){const B=BONUS[bType];panel(92,170);txt('BONUS ROUND',112,100,'#ffcf4a','center');txt(B.n,112,116,'#7fd0ff','center');txt(B.a,112,136,'#f4ead8','center');txt(B.b,112,150,'#f4ead8','center');}
   if(st==='bonus'){
     txt('TIME '+pad(Math.ceil(bonusT),2),112,28,'#ffcf4a','center');
