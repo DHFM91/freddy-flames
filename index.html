@@ -184,9 +184,10 @@ setHouse(1);
 const PAL=[
   // sp speed, gr grow seconds, tu turn rate, la ladder chance, da dash rate, ch chase rate, sk ember seconds
   {n:'RED',   o:'#d8321e',m:'#ff8a1c',c:'#ffe27a',sp:16,gr:5.4,tu:.42,la:.38,da:.08,ch:.15,sk:7.5,desc:'THEY THROW SPARKS'},
-  {n:'BLUE',  o:'#2348e8',m:'#4fb2ff',c:'#dff6ff',sp:23,gr:4.9,tu:.55,la:.48,da:.12,ch:.22,sk:6.5,desc:'THEY RUN FASTER'},
-  {n:'GREEN', o:'#178a34',m:'#6fdc3e',c:'#efffb8',sp:19,gr:6.0,tu:1.7,la:.45,da:.2, ch:.2, sk:9.0,desc:'THEY ZIG AND ZAG'},
-  {n:'VIOLET',o:'#8a22c9',m:'#ff58cf',c:'#ffe0f7',sp:28,gr:4.0,tu:.8, la:.65,da:.22,ch:.4, sk:5.0,desc:'THEY HUNT YOU DOWN'},
+  {n:'BLUE',  o:'#2348e8',m:'#4fb2ff',c:'#dff6ff',sp:20,gr:5.3,tu:.5, la:.42,da:.1, ch:.18,sk:7.5,desc:'THEY RUN FASTER'},
+  // green zig-zags on a steady beat (zz seconds): a short pause, then a turn. Readable, not random.
+  {n:'GREEN', o:'#178a34',m:'#6fdc3e',c:'#efffb8',sp:18,gr:5.6,tu:.25,zz:1.3,la:.4,da:.08,ch:.15,sk:8.0,desc:'THEY ZIG AND ZAG'},
+  {n:'VIOLET',o:'#8a22c9',m:'#ff58cf',c:'#ffe0f7',sp:21,gr:5.2,tu:.55,la:.48,da:.12,ch:.28,sk:7.0,hunt:1,desc:'THEY HUNT YOU DOWN'},
 ];
 const PUDW=[0,7,13,21];
 const TANKMAX=16;                    // 8 pressure levels x 2 shots
@@ -564,8 +565,14 @@ function updFlames(dt,cap){
     if(fl.mode==='floor'){
       fl.hold=Math.max(0,fl.hold-dt);fl.dash=Math.max(0,fl.dash-dt);
       if(Math.random()<p.tu*dt)fl.dir*=-1;
+      if(p.zz){fl.zz=(fl.zz===undefined?rnd(0,p.zz):fl.zz)-dt;if(fl.zz<=0){fl.zz=p.zz*rnd(.85,1.15);fl.zt=.22;}}
+      if(fl.zt>0){fl.zt-=dt;fl.hold=Math.max(fl.hold,.05);if(fl.zt<=0)fl.dir*=-1;}
       if(Math.random()<.2*dt)fl.hold=rnd(.3,1.1);
       if(Math.random()<p.da*dt){fl.dash=rnd(.4,.9);fl.hold=0;}
+      if(p.hunt&&st==='play'&&fred&&fred.f===fl.f&&fred.mode==='floor'){
+        const dx=fred.x-fl.x,ad=Math.abs(dx),reach=20+Math.ceil(fred.tank/2)*13+12;
+        if(ad<170){fl.dir=Math.sign(dx)||fl.dir;if(ad<reach&&ad>34){fl.hold=Math.max(fl.hold,.1);fl.dash=0;}}
+      }
       if(st==='play'&&fred&&fred.f===fl.f&&fred.mode==='floor'&&Math.abs(fred.x-fl.x)<48&&Math.random()<p.ch*dt){fl.dir=Math.sign(fred.x-fl.x)||1;fl.dash=rnd(.5,.9);fl.hold=0;}
       const nx=fl.x+fl.dir*(fl.hold>0?0:p.sp*m*(fl.dash>0?1.7:1))*dt;
       if(fl.cool<=0)for(const L of LADDERS){
@@ -590,8 +597,14 @@ function updFlames(dt,cap){
 }
 // Big flames spit sparks; a spark that lands becomes a new flame (sometimes up through the ceiling).
 function throwEmber(fl){
-  const up=fl.f<2&&Math.random()<.25;
-  embers.push({x:fl.x,y:fl.y-fdim(fl.s).h+2,vx:rnd(-45,45),vy:up?-178:-rnd(70,110),tf:up?fl.f+1:fl.f});
+  const up=fl.f<2&&Math.random()<.25,y0=fl.y-fdim(fl.s).h+2;
+  if(pal().hunt&&st==='play'&&fred&&fred.f===fl.f&&fred.mode==='floor'){
+    const side=Math.sign(fred.x-fl.x)||1;let tx=fred.x+side*rnd(14,30);
+    if(tx<LEFT+2||tx>RIGHT-2)tx=fred.x+rnd(-3,3); // backed into a wall: the spark comes down right on him, so move!
+    tx=clamp(tx,LEFT+2,RIGHT-2);
+    const vy=-rnd(85,110),dy=FL[fl.f]-y0,T=(-vy+Math.sqrt(vy*vy+400*dy))/200;
+    embers.push({x:fl.x,y:y0,vx:clamp((tx-fl.x)/T,-170,170),vy,tf:fl.f});
+  }else embers.push({x:fl.x,y:y0,vx:rnd(-45,45),vy:up?-178:-rnd(70,110),tf:up?fl.f+1:fl.f});
   if(st==='play')tone(900,.06,'square',.02,1700);
 }
 function updEmbers(dt,cap){
