@@ -105,8 +105,8 @@ button:focus-visible{outline:2px solid var(--ember)}
   </div>
 </main>
 <div class="legend">
-  <span class="k">←</span><span class="k">→</span> WALK &nbsp;&nbsp; <span class="k">↑</span><span class="k">↓</span> LADDERS<br>
-  <span class="k">SPACE</span> SQUIRT &nbsp;&nbsp; <span class="k">Z</span> JUMP &nbsp;&nbsp; <span class="k">P</span> PAUSE &nbsp;&nbsp; <span class="k">M</span> SOUND
+  <span class="k">←</span><span class="k">→</span> WALK &nbsp;&nbsp; <span class="k">↑</span> JUMP (OR CLIMB AT A LADDER) &nbsp;&nbsp; <span class="k">↓</span> CLIMB DOWN<br>
+  <span class="k">SPACE</span> SQUIRT &nbsp;&nbsp; <span class="k">P</span> PAUSE &nbsp;&nbsp; <span class="k">M</span> SOUND
 </div>
 <div class="credit">FREDDY FLAMES BY LEE FEULING<br>2026 VERSION CO-DEVELOPED BY DAVID FEULING<br>RECREATION OF ORIGINAL, CIRCA 1983</div>
 
@@ -241,7 +241,8 @@ let tapStart=false;
 const KEYS={ArrowLeft:'left',a:'left',A:'left',ArrowRight:'right',d:'right',D:'right',ArrowUp:'up',w:'up',W:'up',ArrowDown:'down',s:'down',S:'down',
   z:'jump',Z:'jump',k:'jump',K:'jump',Shift:'jump',x:'fire',X:'fire',j:'fire',J:'fire',' ':'fire',Control:'fire',Enter:'start','1':'start'};
 const LETTERS='ABCDEFGHIJKLMNOPQRSTUVWXYZ.-!';
-const clearRaw=()=>KS.forEach(k=>RAW[k]=0);
+let kbUp=false;
+const clearRaw=()=>{KS.forEach(k=>RAW[k]=0);kbUp=false;};
 function togglePause(){if(st==='play'||st==='bonus'){paused=!paused;clearRaw();}}
 addEventListener('keydown',e=>{
   ensureAudio();
@@ -251,9 +252,9 @@ addEventListener('keydown',e=>{
   }
   if(e.key==='m'||e.key==='M'){muted=!muted;return;}
   if(e.key==='p'||e.key==='P'||e.key==='Escape'){if(!e.repeat)togglePause();return;}
-  const k=KEYS[e.key]; if(k){RAW[k]=1;e.preventDefault();}
+  const k=KEYS[e.key]; if(k){RAW[k]=1;if(k==='up')kbUp=true;e.preventDefault();}
 });
-addEventListener('keyup',e=>{const k=KEYS[e.key]; if(k)RAW[k]=0;});
+addEventListener('keyup',e=>{const k=KEYS[e.key]; if(k){RAW[k]=0;if(k==='up')kbUp=false;}});
 addEventListener('blur',()=>{clearRaw();if(st==='play'||st==='bonus')paused=true;});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){clearRaw();if(st==='play'||st==='bonus')paused=true;}});
 cv.addEventListener('pointerdown',e=>{e.preventDefault();ensureAudio();cv.focus();if(st==='attract'||paused)tapStart=true;});
@@ -386,6 +387,7 @@ function updFred(dt){
       f.vy+=420*dt;f.y+=f.vy*dt;
       if(f.y>=FL[f.f]){f.y=FL[f.f];f.air=false;f.vy=0;}
     }else{
+      if(P.up&&kbUp&&!LADDERS.some(l=>l.a===f.f&&Math.abs(l.x-f.x)<18))f.jb=.15;
       if(f.jb>0){f.jb=0;f.air=true;f.vy=-130;sfx.jump();}
       else if(I.up||I.down){
         // forgiving ladders: hold up/down near one and Freddy steps onto it
@@ -873,7 +875,7 @@ function drawAttract(){
     txt('PUDDLES REFILL YOUR TANK',112,202,'#f4ead8','center');
     txt('MORE WATER, LONGER SQUIRT',112,214,'#f4ead8','center');
     txt('SHRINK 50   OUT 200',112,232,'#ffcf4a','center');
-    txt(touch?'RED SQUIRT  BLUE JUMP':'SPACE SQUIRT   Z JUMP',112,246,'#9aa1b5','center');
+    txt(touch?'RED SQUIRT  BLUE JUMP':'SPACE SQUIRT  UP JUMP',112,246,'#9aa1b5','center');
   }else{
     txt('GLOBAL TOP 10',112,32,'#ffcf4a','center');
     const ord=['1ST','2ND','3RD','4TH','5TH','6TH','7TH','8TH','9TH','10TH'];
@@ -908,7 +910,7 @@ function render(){
   if(st==='ready'){
     const help=level===1;panel(92,help?190:HOLES.length?178:164);txt('LEVEL '+pad(level,2),112,100,'#ffcf4a','center');txt(house.th.n,112,114,'#f4ead8','center');
     txt(p.n+' FLAMES',112,132,p.m,'center');txt(p.desc,112,146,'#9aa1b5','center');
-    if(help){txt(touch?'STICK: WALK & LADDERS':'ARROWS: WALK & LADDERS',112,164,'#f4ead8','center');txt(touch?'RED SQUIRT  BLUE JUMP':'SPACE SQUIRT  Z JUMP',112,176,'#f4ead8','center');}
+    if(help){txt(touch?'STICK: WALK & LADDERS':'ARROWS: WALK & LADDERS',112,164,'#f4ead8','center');txt(touch?'RED SQUIRT  BLUE JUMP':'SPACE SQUIRT  UP JUMP',112,176,'#f4ead8','center');}
     else if(HOLES.length)txt('WATCH THE FLOOR!',112,164,'#ff6a1a','center');
   }
   if(st==='clear'){panel(96,150);txt('FIRE IS OUT!',112,104,'#ffcf4a','center');txt('TANK BONUS',112,120,'#f4ead8','center');txt(String(tankBonus),112,134,'#7fd0ff','center');}
