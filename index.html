@@ -482,7 +482,10 @@ function updFred(dt){
     if(P.fire)squirt(true);else if(I.fire&&f.cd<=0)squirt(false);
   }else{
     const L=f.lad,v=(I.down?1:0)-(I.up?1:0);
-    f.y+=v*34*dt;if(v)f.anim+=dt;
+    // going down, Freddy slides like a firepole: quick start, speeding up to ~4x his climbing speed
+    if(v>0){f.slide=Math.min(150,(f.slide||80)+320*dt);f.y+=f.slide*dt;
+      if(Math.random()<10*dt)parts.push({x:L.x+(Math.random()<.5?-6:5),y:f.y-12,vx:rnd(-12,12),vy:rnd(-25,-5),l:.25,c:'#ffd88a',z:1,g:1});}
+    else{f.slide=0;f.y+=v*34*dt;if(v)f.anim+=dt;}
     const top=FL[L.b],bot=FL[L.a];
     if(f.y>bot){f.y=bot;f.f=L.a;f.mode='floor';}
     else if(f.y<top){f.y=top;f.f=L.b;f.mode='floor';}
